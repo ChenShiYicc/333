@@ -1,325 +1,163 @@
-import time
-import random
-import re
+# 导入所需的库
+import streamlit as st
+import streamlit.components.v1 as components
 import requests
-import seaborn as sns
-import pandas as pd
-from bs4 import BeautifulSoup
 import jieba
 from collections import Counter
-import streamlit as st
+from pyecharts.charts import WordCloud, Bar, Line, Pie, Scatter, Radar, Funnel
 from pyecharts import options as opts
-from pyecharts.charts import WordCloud
-import matplotlib.pyplot as plt
-from streamlit.components.v1 import html
-import matplotlib.font_manager as fm
+import re
 
+# Streamlit页面设置
+st.title('文本分析工具')
 
-# 步骤 1：抓取网页内容
-def fetch_url_content(url):
+# 用户输入URL
+url = st.text_input('请输入文章的URL')
+
+# 定义函数
+def fetch_text_from_url(url):
     try:
-        # 设置请求头，模拟浏览器访问
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-        }
+        response = requests.get(url)
+        response.raise_for_status()  # 检查请求是否成功
+        response.encoding = 'utf-8'  # 强制指定编码为utf-8
+        return response.text
+    except requests.exceptions.HTTPError as errh:
+        st.error(f"HTTP Error: {errh}")
+    except requests.exceptions.ConnectionError as errc:
+        st.error(f"Error Connecting: {errc}")
+    except requests.exceptions.Timeout as errt:
+        st.error(f"Timeout Error: {errt}")
+    except requests.exceptions.RequestException as err:
+        st.error(f"Oops: Something Else: {err}")
+    return None
 
-        # 发送HTTP请求
-        response = requests.get(url, headers=headers, timeout=10)
-
-        # 检查请求是否成功
-        if response.status_code == 200:
-            print("成功抓取网页！")
-        else:
-            print(f"网页抓取失败，状态码: {response.status_code}")
-            return ""
-
-        # 手动设置正确的编码
-        response.encoding = response.apparent_encoding
-
-        # 解析HTML页面
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # 试图抓取更多的内容
-        paragraphs = soup.find_all(['p', 'div', 'span'])
-        text = ' '.join([p.get_text(strip=True) for p in paragraphs])
-
-        # 如果没有抓取到任何内容
-        if not text:
-            print("没有抓取到有效的文本内容")
-            return ""
-
-        # 模拟延迟
-        #time.sleep(random.uniform(1, 3))  # 添加1到3秒的随机延迟
-
-        return text
-
-    except requests.exceptions.Timeout:
-        print("请求超时，尝试重新连接...")
-        return fetch_url_content(url)  # 尝试重新抓取
-    except requests.exceptions.RequestException as e:
-        print(f"请求异常: {e}")
-        return ""
-    except Exception as e:
-        print(f"发生错误: {e}")
-        return ""
-
-# 步骤 2：去除HTML标签
-def remove_html_tags(text):
-    clean_text = re.sub(r'<[^>]+>', '', text)
-    return clean_text
-
-# 步骤 3：去除标点符号
 def remove_punctuation(text):
-    clean_text = re.sub(r'[^\w\s]', '', text)
-    return clean_text
+    # 只保留中文字符
+    return re.sub(r'[^\u4e00-\u9fa5]+', '', text)
 
-# 步骤 4：分词
-def segment_text(text):
-    words = jieba.cut(text)
-    # 将分词结果中的词语以空格分隔
-    words_str = ' '.join(list(words))
-    return words_str
+def tokenize_and_count(text):
+    words = jieba.lcut(text)
+    # 过滤空字符串
+    words = [word for word in words if word.strip()]
+    word_counts = Counter(words)
+    return word_counts
 
-# 步骤 5：统计词频
-def get_word_frequency(segmented_text):
-    # 将分词结果的字符串再次分割为列表
-    words = segmented_text.split()
-    word_count = Counter(words)
-    return word_count
+def filter_low_freq_words(word_counts, min_freq):
+    return Counter({word: count for word, count in word_counts.items() if count >= min_freq})
 
-# 筛选词频
-def filter_word_frequency(word_count, min_freq, max_freq):
-    return Counter({word: freq for word, freq in word_count.items() if min_freq <= freq <= max_freq})
+def generate_wordcloud(word_counts):
+    wordcloud = WordCloud()
+    wordcloud.add("", word_counts.items(), word_size_range=[20, 100])
+    wordcloud.set_global_opts(title_opts=opts.TitleOpts(title="Word Cloud"))
+    return wordcloud
 
-# 步骤 6：生成 pyecharts 词云
-def generate_wordcloud(word_count):
-    # 按词频排序，取前20个词
-    sorted_word_count = dict(sorted(word_count.items(), key=lambda item: item[1], reverse=True)[:20])
+def generate_bar_chart(word_counts):
+    bar = Bar()
+    words, counts = zip(*word_counts.items())
+    bar.add_xaxis(list(words))
+    bar.add_yaxis("词频", list(counts))
+    bar.set_global_opts(title_opts=opts.TitleOpts(title="词频条形图"), xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=45)))
+    return bar
 
-    # 生成词云
-    wc = WordCloud()
-    wc.add("词云", list(sorted_word_count.items()), word_size_range=[20, 50])  # 调整词云大小范围
-    wc.set_global_opts(title_opts=opts.TitleOpts(title="词云图"))
+def generate_line_chart(word_counts):
+    line = Line()
+    words, counts = zip(*word_counts.items())
+    line.add_xaxis(list(words))
+    line.add_yaxis("词频", list(counts))
+    line.set_global_opts(title_opts=opts.TitleOpts(title="词频折线图"), xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=45)))
+    return line
 
-    return wc
+def generate_pie_chart(word_counts):
+    pie = Pie()
+    words, counts = zip(*word_counts.items())
+    pie.add("", [list(z) for z in zip(words, counts)], radius=["30%", "75%"])
+    pie.set_global_opts(title_opts=opts.TitleOpts(title="词频饼图"))
+    return pie
 
-# 步骤 7：绘制词频图
-def plot_word_freq(word_count):
-    # 设置支持中文的字体
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
+def generate_scatter_chart(word_counts):
+    scatter = Scatter()
+    words, counts = zip(*word_counts.items())
+    scatter.add_xaxis(list(words))
+    scatter.add_yaxis("词频", list(counts))
+    scatter.set_global_opts(title_opts=opts.TitleOpts(title="词频散点图"))
+    return scatter
 
-    # 获取词频
-    word_freq = word_count.most_common(20)
-    words, freqs = zip(*word_freq)
+def generate_radar_chart(word_counts):
+    radar = Radar()
+    radar.add_schema(schema=[opts.RadarIndicatorItem(name=word, max_=max(word_counts.values())) for word in word_counts.keys()])
+    radar.add("词频", [list(word_counts.values())])
+    radar.set_global_opts(title_opts=opts.TitleOpts(title="词频雷达图"))
+    return radar
 
-    # 创建图形
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(words, freqs, color='skyblue')
+def generate_funnel_chart(word_counts):
+    funnel = Funnel()
+    words, counts = zip(*word_counts.items())
+    funnel.add("", [list(z) for z in zip(words, counts)])
+    funnel.set_global_opts(title_opts=opts.TitleOpts(title="词频漏斗图"))
+    return funnel
 
-    # 设置x轴标签和标题
-    ax.set_xlabel('词频')
-    ax.set_title('词频柱状图')
+def display_top_words(word_counts, top_n=20):
+    top_words = word_counts.most_common(top_n)
+    st.write("词频排名前20的词汇：")
+    for word, count in top_words:
+        st.write(f"{word}: {count}")
 
-    # 确保y轴范围足够显示所有标签
-    ax.set_ylim(0, len(words) + 1)
+def render_pyecharts_chart(chart):
+    # 渲染并显示pyecharts图表
+    chart_html = chart.render_embed()
+    components.html(chart_html, height=600)  # 可以调整height参数
 
-    # 自动调整子图参数, 使之填充整个图像区域
-    plt.tight_layout()
+# 如果用户输入了URL，开始处理
+if url:
+    text = fetch_text_from_url(url)
+    if text is None:
+        st.error("无法获取文本内容，请检查URL或网络连接。")
+    else:
+        # 去除文本中的标点符号，只保留中文字符
+        text = remove_punctuation(text)
 
-    # 显示图形
-    st.pyplot(fig)
+        # 对文本分词，统计词频
+        word_counts = tokenize_and_count(text)
 
-# 绘制词频折线图
-def plot_word_freq_line(word_count):
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
+        # 过滤低频词
+        min_freq = st.sidebar.slider('设置最低词频阈值', 1, 100, 5)
+        filtered_word_counts = filter_low_freq_words(word_counts, min_freq)
 
-    word_freq = word_count.most_common(20)
-    words, freqs = zip(*word_freq)
+        # 选择图表类型
+        chart_type = st.sidebar.selectbox(
+            '选择图表类型',
+            ['词云', '条形图', '折线图', '饼图', '散点图', '雷达图', '漏斗图']
+        )
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(words, freqs, marker='o', linestyle='-', color='b')
-    ax.set_xlabel('词汇')
-    ax.set_ylabel('词频')
-    ax.set_title('词频折线图')
-    ax.set_xticklabels(words, rotation=90)  # 旋转x轴标签以便显示中文
-    plt.tight_layout()
-    st.pyplot(fig)
+        # 根据用户选择的图表类型生成图表
+        if chart_type == '词云':
+            wordcloud = generate_wordcloud(filtered_word_counts)
+            st.subheader('词云')
+            render_pyecharts_chart(wordcloud)
+        elif chart_type == '条形图':
+            bar = generate_bar_chart(filtered_word_counts)
+            st.subheader('词频条形图')
+            render_pyecharts_chart(bar)
+        elif chart_type == '折线图':
+            line = generate_line_chart(filtered_word_counts)
+            st.subheader('词频折线图')
+            render_pyecharts_chart(line)
+        elif chart_type == '饼图':
+            pie = generate_pie_chart(filtered_word_counts)
+            st.subheader('词频饼图')
+            render_pyecharts_chart(pie)
+        elif chart_type == '散点图':
+            scatter = generate_scatter_chart(filtered_word_counts)
+            st.subheader('词频散点图')
+            render_pyecharts_chart(scatter)
+        elif chart_type == '雷达图':
+            radar = generate_radar_chart(filtered_word_counts)
+            st.subheader('词频雷达图')
+            render_pyecharts_chart(radar)
+        elif chart_type == '漏斗图':
+            funnel = generate_funnel_chart(filtered_word_counts)
+            st.subheader('词频漏斗图')
+            render_pyecharts_chart(funnel)
 
-# 绘制词频饼图
-def plot_word_freq_pie(word_count):
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
-
-    word_freq = word_count.most_common(10)
-    words, freqs = zip(*word_freq)
-
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.pie(freqs, labels=words, autopct='%1.1f%%', startangle=90)
-    ax.set_title('词频饼图')
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# 绘制词频条形图
-def plot_word_freq_bar(word_count):
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
-
-    word_freq = word_count.most_common(20)
-    words, freqs = zip(*word_freq)
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(words, freqs, color='skyblue')
-    ax.set_xlabel('词汇')
-    ax.set_ylabel('词频')
-    ax.set_title('词频条形图')
-    plt.xticks(rotation=45, ha="right")  # 旋转x轴标签以便显示中文
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# 绘制词频面积图
-def plot_word_freq_area(word_count):
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
-
-    word_freq = word_count.most_common(20)
-    words, freqs = zip(*word_freq)
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.fill_between(words, freqs, alpha=0.4, color='skyblue')
-    ax.plot(words, freqs, color='skyblue')
-    ax.set_xlabel('词汇')
-    ax.set_ylabel('词频')
-    ax.set_title('词频面积图')
-    plt.xticks(rotation=45, ha="right")  # 旋转x轴标签以便显示中文
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# 绘制词频热力图
-def plot_word_freq_heatmap(word_count):
-    font_path = 'SimHei.ttf'  # 指定字体文件路径
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
-
-    # 获取词频
-    word_freq = dict(word_count.most_common(20))
-    words = list(word_freq.keys())
-    freqs = list(word_freq.values())
-
-    # 创建一个DataFrame来存储数据
-    data = pd.DataFrame({'词汇': words, '词频': freqs})
-
-    # 创建一个figure对象
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-    # 使用seaborn创建热力图
-    sns.heatmap(data.set_index('词汇'), annot=True, cmap='YlGnBu', ax=ax)
-
-    # 设置标题
-    ax.set_title('词频热力图')
-
-    # 显示图形
-    st.pyplot(fig)
-
-# 通过streamlit渲染pyecharts词云图
-def st_pyecharts_chart(wc):
-    html_code = wc.render_embed()  # 获取渲染的HTML代码
-    html(html_code, height=600)  # 使用Streamlit的html组件嵌入图表
-
-# Streamlit UI
-def main():
-
-    st.title('中文文章词频分析与词云展示')
-
-    # 输入URL
-    url = st.text_input("请输入文章URL:")
-
-    if url:
-        try:
-            # 步骤 1：抓取网页内容
-            text = fetch_url_content(url)
-
-            if not text:
-                st.warning("未抓取到网页内容，请检查URL或网站内容。")
-                return
-
-            # 显示原始文本
-            st.subheader("抓取的网页内容")
-            st.write(text[:500] + '...')  # 显示部分抓取的文本
-
-            # 步骤 2：去除HTML标签
-            text = remove_html_tags(text)
-
-            # 显示去除HTML标签后的文本
-            st.subheader("去除HTML标签后的内容")
-            st.write(text[:500] + '...')
-
-            # 步骤 3：去除标点符号
-            text = remove_punctuation(text)
-
-            # 显示去除标点后的文本
-            st.subheader("去除标点符号后的内容")
-            st.write(text[:500] + '...')
-
-            # 步骤 4：分词
-            words = segment_text(text)
-
-            # 步骤 5：统计词频
-            word_count = get_word_frequency(words)
-
-            # 自动获取词频的最大值和最小值
-            min_freq = min(word_count.values())
-            max_freq = max(word_count.values())
-
-            # 输入筛选词频范围
-            min_freq_slider = st.sidebar.slider("选择最小词频", min_value=min_freq, max_value=max_freq, value=min_freq, step=1)
-            max_freq_slider = st.sidebar.slider("选择最大词频", min_value=min_freq_slider, max_value=max_freq, value=max_freq, step=1)
-
-            # 筛选词频
-            filtered_word_count = filter_word_frequency(word_count, min_freq_slider, max_freq_slider)
-
-            # 展示筛选后的词频前20的词
-            st.subheader('筛选后的词频排名前20的词')
-            top_20_words = filtered_word_count.most_common(20)
-            for word, freq in top_20_words:
-                st.write(f"{word}: {freq}")
-
-            # 图形筛选
-            chart_type = st.sidebar.selectbox(
-                "选择图形类型",
-                ["词云图", "词频柱状图", "词频条形图", "词频面积图", "词频折线图", "词频饼图", "词频热力图"]
-            )
-            st.sidebar.write(f"当前选择的图形类型: {chart_type}")
-            if chart_type == "词云图":
-                wc_chart = generate_wordcloud(filtered_word_count)
-                st_pyecharts_chart(wc_chart)
-
-            if chart_type == "词频柱状图":
-                plot_word_freq(filtered_word_count)
-
-            elif chart_type == "词频条形图":
-                plot_word_freq_bar(filtered_word_count)
-
-            elif chart_type == "词频面积图":
-                plot_word_freq_area(filtered_word_count)
-
-            elif chart_type == "词频折线图":
-                plot_word_freq_line(filtered_word_count)
-
-            elif chart_type == "词频饼图":
-                plot_word_freq_pie(filtered_word_count)
-
-            elif chart_type == "词频热力图":
-                plot_word_freq_heatmap(filtered_word_count)
-
-        except Exception as e:
-            st.error(f"抓取或处理文本时出错: {e}")
-
-if __name__ == '__main__':
-    main()
+        # 展示词频排名前20的词汇
+        display_top_words(filtered_word_counts)

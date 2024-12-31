@@ -37,10 +37,13 @@ def remove_punctuation(text):
 
 def tokenize_and_count(text):
     words = jieba.lcut(text)
-    # 过滤空字符串
-    words = [word for word in words if word.strip()]
+    # 过滤空字符串和停用词
+    words = [word for word in words if word.strip() and word not in STOP_WORDS]
     word_counts = Counter(words)
     return word_counts
+
+# 定义停用词列表
+STOP_WORDS = set(["在", "的", "了", "是", "我", "有", "和", "就", "不", "人", "都", "一", "个", "上", "也", "很", "到", "说", "要", "以", "和", "那", "去", "你", "会", "着", "没有", "看", "好", "自己", "这", "可以", "与", "我们", "如果", "他", "她", "它", "因为", "所以", "中"])
 
 def filter_low_freq_words(word_counts, min_freq):
     return Counter({word: count for word, count in word_counts.items() if count >= min_freq})

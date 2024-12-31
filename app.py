@@ -1,15 +1,15 @@
 # 导入所需的库
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 import jieba
 from collections import Counter
 from pyecharts.charts import WordCloud, Bar, Line, Pie, Scatter, Radar, Funnel
 from pyecharts import options as opts
 import re
+import streamlit.components.v1 as components
 
 # Streamlit页面设置
-st.title('文本分析工具')
+st.set_page_config(page_title='文本分析工具', layout="wide")
 
 # 用户输入URL
 url = st.text_input('请输入文章的URL')
@@ -123,41 +123,45 @@ if url:
         min_freq = st.sidebar.slider('设置最低词频阈值', 1, 100, 5)
         filtered_word_counts = filter_low_freq_words(word_counts, min_freq)
 
-        # 选择图表类型
-        chart_type = st.sidebar.selectbox(
-            '选择图表类型',
-            ['词云', '条形图', '折线图', '饼图', '散点图', '雷达图', '漏斗图']
-        )
+        col1, col2 = st.columns([2, 1])
 
-        # 根据用户选择的图表类型生成图表
-        if chart_type == '词云':
-            wordcloud = generate_wordcloud(filtered_word_counts)
-            st.subheader('词云')
-            render_pyecharts_chart(wordcloud)
-        elif chart_type == '条形图':
-            bar = generate_bar_chart(filtered_word_counts)
-            st.subheader('词频条形图')
-            render_pyecharts_chart(bar)
-        elif chart_type == '折线图':
-            line = generate_line_chart(filtered_word_counts)
-            st.subheader('词频折线图')
-            render_pyecharts_chart(line)
-        elif chart_type == '饼图':
-            pie = generate_pie_chart(filtered_word_counts)
-            st.subheader('词频饼图')
-            render_pyecharts_chart(pie)
-        elif chart_type == '散点图':
-            scatter = generate_scatter_chart(filtered_word_counts)
-            st.subheader('词频散点图')
-            render_pyecharts_chart(scatter)
-        elif chart_type == '雷达图':
-            radar = generate_radar_chart(filtered_word_counts)
-            st.subheader('词频雷达图')
-            render_pyecharts_chart(radar)
-        elif chart_type == '漏斗图':
-            funnel = generate_funnel_chart(filtered_word_counts)
-            st.subheader('词频漏斗图')
-            render_pyecharts_chart(funnel)
+        with col1:
+            # 选择图表类型
+            chart_type = st.selectbox(
+                '选择图表类型',
+                ['词云', '条形图', '折线图', '饼图', '散点图', '雷达图', '漏斗图']
+            )
 
-        # 展示词频排名前20的词汇
-        display_top_words(filtered_word_counts)
+            # 根据用户选择的图表类型生成图表
+            if chart_type == '词云':
+                wordcloud = generate_wordcloud(filtered_word_counts)
+                st.subheader('词云')
+                render_pyecharts_chart(wordcloud)
+            elif chart_type == '条形图':
+                bar = generate_bar_chart(filtered_word_counts)
+                st.subheader('词频条形图')
+                render_pyecharts_chart(bar)
+            elif chart_type == '折线图':
+                line = generate_line_chart(filtered_word_counts)
+                st.subheader('词频折线图')
+                render_pyecharts_chart(line)
+            elif chart_type == '饼图':
+                pie = generate_pie_chart(filtered_word_counts)
+                st.subheader('词频饼图')
+                render_pyecharts_chart(pie)
+            elif chart_type == '散点图':
+                scatter = generate_scatter_chart(filtered_word_counts)
+                st.subheader('词频散点图')
+                render_pyecharts_chart(scatter)
+            elif chart_type == '雷达图':
+                radar = generate_radar_chart(filtered_word_counts)
+                st.subheader('词频雷达图')
+                render_pyecharts_chart(radar)
+            elif chart_type == '漏斗图':
+                funnel = generate_funnel_chart(filtered_word_counts)
+                st.subheader('词频漏斗图')
+                render_pyecharts_chart(funnel)
+
+        with col2:
+            # 展示词频排名前20的词汇
+            display_top_words(filtered_word_counts)
